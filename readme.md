@@ -1,4 +1,4 @@
-High Dynamic Range (HDR) Histogram for Elixir
+# High Dynamic Range (HDR) Histogram for Elixir
 
 Get percentile values from stream of input. Each histogram has a configurable
 min, max and precision value which control both the accuracy and memory
@@ -9,8 +9,8 @@ Learn more about [HDR Histograms](http://hdrhistogram.org/).
 Writes (which ought to substantially outnumber reads) are in constant time
 regardless of the configuration. Querying a histogram for a specific percentile,
 or other metric (max value, min value) is slightly slower as the range and/or
-precision grows. However, the implementation relies solely on write-optimized ETS
-tables and thus operations are not serialized (beyond the mutex locks used by ETS).
+precision grows. However, the implementation relies on write-optimized ETS
+tables and thus operations are not serialized (beyond the locks used by ETS).
 
 A histogram with a range of 1..1_000_000 and a precision of 3 takes roughly
 16000 bytes.
@@ -37,7 +37,7 @@ worker(MyApp.Stats, [])
 ```
 
 
-Values can then be recorded via the `record!`` or `record` functions:
+Values can then be recorded via the `record!` or `record` functions:
 
 ```
 alias MyApp.Stats
@@ -75,3 +75,7 @@ You can get the memory requirements of a registry by calling:
 
 ```
 :ets.info(MyApp.Stats)[:memory]
+```
+
+There's a bit of additional overhead for each histogram, but that will give you
+the bulk of it.
