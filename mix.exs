@@ -11,7 +11,7 @@ defmodule Histogrex.Mixfile do
       name: "Histogrex",
       version: @version,
       consolidate_protocols: Mix.env != :test,
-      description: "High Dynamic Range (HDR) Histogram Elixir implementation",
+      description: "Concurrent High Dynamic Range (HDR) Histogram",
       package: [
         licenses: ["MIT"],
         links: %{

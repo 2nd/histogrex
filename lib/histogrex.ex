@@ -33,6 +33,7 @@ defmodule Histogrex do
       Stats.record!(:load_user, 233)
       Stats.record!(:db_save_settings, 84)
 
+      Stats.mean(:load_user)
       Stats.max(:db_save_settings)
       Stats.total_count(:db_save_settings)
       Stats.value_at_quantile(:load_user, 99.9)
@@ -114,6 +115,11 @@ defmodule Histogrex do
       @spec total_count(atom) :: non_neg_integer
       def total_count(metric) do
         Histogrex.total_count(get_histogrex(metric))
+      end
+
+      @spec mean(atom) :: non_neg_integer
+      def mean(metric) do
+        Histogrex.mean(get_histogrex(metric))
       end
 
       @spec max(atom) :: non_neg_integer
@@ -263,6 +269,25 @@ defmodule Histogrex do
     end)
   end
 
+  @spec mean(t) :: float
+  def mean(h) do
+    it = iterator(h)
+    case it.total_count == 0 do
+      true -> 0
+      false -> do_mean(h, it)
+    end
+  end
+
+  defp do_mean(h, it) do
+    total = Enum.reduce(it, 0, fn it, total ->
+      total = case it.count_at_index do
+        0 -> total
+        n -> total + n * median_equivalent_value(h, it.value_from_index)
+      end
+    end)
+    total / it.total_count
+  end
+
   @doc """
   Resets the histogram to 0 values. Note that the histogram is a fixed-size, so
   calling this won't free any memory. It is useful for testing.
@@ -352,14 +377,21 @@ defmodule Histogrex do
 
   def lowest_equivalent_value(h, value) do
     {bucket_index, sub_bucket_index} = get_bucket_indexes(h, value)
+    lowest_equivalent_value(h, bucket_index, sub_bucket_index)
+  end
+
+  def lowest_equivalent_value(h, bucket_index, sub_bucket_index) do
     value_from_index(h, bucket_index, sub_bucket_index)
   end
 
   defp next_non_equivalent_value(h, value) do
     {bucket_index, sub_bucket_index} = get_bucket_indexes(h, value)
+    lowest_equivalent_value(h, bucket_index, sub_bucket_index) + size_of_equivalent_value_range(h, bucket_index, sub_bucket_index)
+  end
 
-    lowest_equivalent_value = value_from_index(h, bucket_index, sub_bucket_index)
-    lowest_equivalent_value + size_of_equivalent_value_range(h, bucket_index, sub_bucket_index)
+  defp median_equivalent_value(h, value) do
+    {bucket_index, sub_bucket_index} = get_bucket_indexes(h, value)
+    lowest_equivalent_value(h, bucket_index, sub_bucket_index) + bsr(size_of_equivalent_value_range(h, bucket_index, sub_bucket_index), 1)
   end
 
   defp size_of_equivalent_value_range(h, bucket_index, sub_bucket_index) do
@@ -453,7 +485,7 @@ defimpl Enumerable, for: Histogrex.Iterator do
         it = %{it |
           count_at_index: count_at_index,
           value_from_index: value_from_index,
-          count_to_index: it.count_at_index + count_at_index,
+          count_to_index: it.count_to_index + count_at_index,
           highest_equivalent_value: Histogrex.highest_equivalent_value(h, value_from_index),
         }
         reduce(it, f.(it, acc), f)

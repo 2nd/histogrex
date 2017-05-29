@@ -4,7 +4,7 @@ defmodule Histogrex.Tests do
 
   # yes, sharing global state, but makes tests much faster. :deal_with_it:
   setup_all do
-     for i <- (0..1_000_000) do
+     for i <- (0..999_999) do
        FakeRegistry.record!(:user_load, i)
      end
      :ok
@@ -24,7 +24,7 @@ defmodule Histogrex.Tests do
    end
 
    test "total count" do
-      assert FakeRegistry.total_count(:user_load) == 1_000_001
+      assert FakeRegistry.total_count(:user_load) == 1_000_000
    end
 
    test "max" do
@@ -33,6 +33,15 @@ defmodule Histogrex.Tests do
 
    test "min" do
      assert FakeRegistry.min(:user_load) == 0
+   end
+
+   test "mean" do
+     assert FakeRegistry.mean(:user_load) == 500000.013312
+   end
+
+   @tag :high_sig
+   test "empty mean" do
+     assert FakeRegistry.mean(:high_sig) == 0
    end
 
    @tag :high_sig

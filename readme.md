@@ -51,6 +51,7 @@ histogram:
 
 ```
 alias MyApp.Stats
+Stats.mean(:load_user)
 Stats.max(:db_save_settings)
 Stats.total_count(:db_save_settings)
 Stats.value_at_quantile(:load_user, 99.9)
