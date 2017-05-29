@@ -18,6 +18,11 @@ defmodule Histogrex.Mixfile do
           "GitHub" => "https://github.com/2nd/histogrex"
         },
         maintainers: ["Karl Seguin"],
+      ],
+      docs: [
+        source_ref: "v#{@version}", main: "Histogrex",
+        canonical: "http://hexdocs.pm/histogrex",
+        source_url: "https://github.com/2nd/histogrex",
       ]
     ]
   end
@@ -28,6 +33,7 @@ defmodule Histogrex.Mixfile do
 
   defp deps do
     [
+      {:ex_doc, ">= 0.0.0", only: :dev},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false},
     ]
   end
