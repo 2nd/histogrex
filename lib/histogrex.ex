@@ -280,7 +280,7 @@ defmodule Histogrex do
 
   defp do_mean(h, it) do
     total = Enum.reduce(it, 0, fn it, total ->
-      total = case it.count_at_index do
+      case it.count_at_index do
         0 -> total
         n -> total + n * median_equivalent_value(h, it.value_from_index)
       end
