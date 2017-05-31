@@ -153,4 +153,22 @@ defmodule Histogrex.Tests do
     # same as what the Go library gives at least
     assert FakeRegistry.min(:high_sig) == 262144
   end
+
+  @tag clear: :high_sig
+  test "reduces" do
+    FakeRegistry.delete(:http_ms, "users")
+    FakeRegistry.delete(:http_ms, :about)
+    FakeRegistry.record!(:http_ms, "spice", 232)
+    FakeRegistry.record!(:http_ms, :flow, 44)
+    FakeRegistry.record!(:http_ms, :flow, 99)
+
+    metrics = FakeRegistry.reduce(%{}, fn {name, it}, acc ->
+      Map.put(acc, name, FakeRegistry.total_count(it))
+    end)
+
+    assert metrics["spice"] == 1
+    assert metrics[:flow] == 2
+    assert metrics[:high_sig] == 0
+    assert metrics[:user_load] == 1_000_000
+  end
 end

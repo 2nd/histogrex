@@ -111,6 +111,16 @@ Stats.max(it)
 Stats.mean(it)
 ```
 
+## Collecting All Data
+Use your registry's `reduce/2` function to collect the data:
+
+```
+Stats.reduce(%{}, fn {name, iterator}, metrics ->
+  collected = {Stats.max(iterator), Stats.value_at_quantile(iterator, 99.9)}
+  Map.put(metrics, name, collected)
+end)
+```
+
 ## Implementation
 
 The core histogram implementation is taken from [the Go version](https://github.com/codahale/hdrhistogram).

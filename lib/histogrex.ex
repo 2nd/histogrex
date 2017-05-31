@@ -40,7 +40,7 @@ defmodule Histogrex do
   """
   use Bitwise
 
-  @total_count_index 1
+  @total_count_index 2
 
   defstruct [
     :name, :registrar, :bucket_count, :counts_length, :unit_magnitude,
@@ -95,9 +95,6 @@ defmodule Histogrex do
   end
 
   @doc false
-  @spec delete(t) :: t
-
-  @doc false
   defmacro __using__(_opts) do
     quote location: :keep do
       use GenServer
@@ -127,21 +124,21 @@ defmodule Histogrex do
 
       @doc false
       @spec record!(atom, non_neg_integer) :: :ok | no_return
-      def record!(metric, value), do: record_n!(metric, value, 1)
+      def record!(metric, value) when is_number(value), do: record_n!(metric, value, 1)
 
       @doc false
       @spec record_n!(atom, non_neg_integer, non_neg_integer) :: :ok | no_return
-      def record_n!(metric, value, n) do
+      def record_n!(metric, value, n) when is_number(value) do
         Histogrex.record!(get_histogrex(metric), value, n)
       end
 
       @doc false
       @spec record(atom, non_neg_integer) :: :ok | {:error, binary}
-      def record(metric, value), do: record_n(metric, value, 1)
+      def record(metric, value) when is_number(value), do: record_n(metric, value, 1)
 
       @doc false
       @spec record_n(atom, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
-      def record_n(metric, value, n) do
+      def record_n(metric, value, n) when is_number(value) do
         Histogrex.record(get_histogrex(metric), value, n)
       end
 
@@ -253,6 +250,10 @@ defmodule Histogrex do
       @doc false
       @spec delete(atom, atom | binary) :: :ok
       def delete(template, metric), do: Histogrex.delete(get_histogrex(template), metric)
+
+      @doc false
+      @spec reduce(any, ((Iterator.t, any) -> any)) :: any
+      def reduce(acc, fun), do: Histogrex.reduce(__MODULE__, acc, fun)
     end
   end
 
@@ -336,7 +337,7 @@ defmodule Histogrex do
 
     template = case template do
       false -> nil
-      true -> create_row(name, counts_length)
+      true -> create_row(name, name, counts_length)
     end
 
     %__MODULE__{
@@ -378,7 +379,7 @@ defmodule Histogrex do
     case index < 0 or h.counts_length <= index do
       true -> {:error, "value it outside of range"}
       false ->
-        :ets.update_counter(h.registrar, h.name, [{2, n}, {index+3, n}])
+        :ets.update_counter(h.registrar, h.name, [{3, n}, {index+4, n}])
         :ok
     end
   end
@@ -403,13 +404,13 @@ defmodule Histogrex do
   """
   @spec record(t | {:error, any}, atom | binary, pos_integer, pos_integer) :: :ok | {:error, any}
   def record({:error, _} = err, _metric, _value, _n), do: err
-  
+
   def record(h, metric, value, n) do
     index = get_value_index(h, value)
     case index < 0 or h.counts_length <= index do
       true -> {:error, "value it outside of range"}
       false ->
-        :ets.update_counter(h.registrar, metric, [{2, n}, {index+3, n}], h.template)
+        :ets.update_counter(h.registrar, metric, [{3, n}, {index+4, n}], h.template)
         :ok
     end
   end
@@ -495,7 +496,7 @@ defmodule Histogrex do
   """
   @spec reset(t) :: :ok
   def reset(%Histogrex{} = h) do
-    :ets.insert(h.registrar, create_row(h.name, h.counts_length))
+    :ets.insert(h.registrar, create_row(h.name, nil, h.counts_length))
     :ok
   end
 
@@ -505,7 +506,7 @@ defmodule Histogrex do
   """
   @spec reset(t, atom | binary) :: :ok
   def reset(%Histogrex{} = h, metric) do
-    :ets.insert(h.registrar, create_row(metric, h.counts_length))
+    :ets.insert(h.registrar, create_row(metric, h.name, h.counts_length))
     :ok
   end
 
@@ -514,7 +515,6 @@ defmodule Histogrex do
   """
   @spec delete(t) :: :ok
   def delete(%Histogrex{} = h), do: delete(h, h.name)
-
 
   @doc """
   Deletes the histogram. Since this histogram was dynamically created through
@@ -526,9 +526,9 @@ defmodule Histogrex do
     :ok
   end
 
-  defp create_row(name, count) do
+  defp create_row(name, template, count) do
     # +1 for the total_count that we'll store at the start
-    List.to_tuple([name |  List.duplicate(0, count + 1)])
+    List.to_tuple([name |  [template | List.duplicate(0, count + 1)]])
   end
 
   @doc """
@@ -645,6 +645,23 @@ defmodule Histogrex do
       nil ->  Iterator.empty()
       counts -> %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
     end
+  end
+
+  @doc """
+  Reduce all of a registry's histograms
+  """
+  @spec reduce(module, any, ((Iterator.t, any)-> any)) :: any
+  def reduce(module, acc, fun) do
+    f = fn counts, acc ->
+      name = elem(counts, 0)
+      h = case elem(counts, 1) do
+        nil -> module.get_histogrex(name)
+        template -> module.get_histogrex(template)
+      end
+      it = %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
+      fun.({name, it}, acc)
+    end
+    :ets.foldl(f, acc, module)
   end
 
   defp get_counts(h), do: get_counts(h, h.name)
@@ -805,8 +822,9 @@ defimpl Enumerable, for: Histogrex.Iterator do
   defp count_at_index(it, bucket_index, sub_bucket_index) do
     index = Histogrex.get_count_index(it.h, bucket_index, sub_bucket_index)
     # 0 is the name
-    # 1 is the total_count
-    # the real count buckets start at 2
-    elem(it.counts, index + 2)
+    # 1 is the template (or nil for static metrics)
+    # 2 is the total_count
+    # the real count buckets start at 3
+    elem(it.counts, index + 3)
   end
 end
