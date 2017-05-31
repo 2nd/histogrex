@@ -94,6 +94,8 @@ defmodule Histogrex do
     end
   end
 
+  @doc false
+  @spec delete(t) :: t
 
   @doc false
   defmacro __using__(_opts) do
@@ -238,10 +240,19 @@ defmodule Histogrex do
         Histogrex.iterator(get_histogrex(metric))
       end
 
+      @doc false
       @spec iterator(atom, atom | binary) :: Iterator.t
       def iterator(template, metric) do
         Histogrex.iterator(get_histogrex(template), metric)
       end
+
+      @doc false
+      @spec delete(atom) :: :ok
+      def delete(metric), do: Histogrex.delete(get_histogrex(metric))
+
+      @doc false
+      @spec delete(atom, atom | binary) :: :ok
+      def delete(template, metric), do: Histogrex.delete(get_histogrex(template), metric)
     end
   end
 
@@ -359,7 +370,9 @@ defmodule Histogrex do
   when the histogram was created will cause an error. This is usually not called
   directly, but rather through the `record/3` of your custom registry
   """
-  @spec record(t, pos_integer, pos_integer) :: :ok | {:error, binary}
+  @spec record(t | {:error, any}, pos_integer, pos_integer) :: :ok | {:error, any}
+  def record({:error, _} = err, _value, _n), do: err
+
   def record(h, value, n) do
     index = get_value_index(h, value)
     case index < 0 or h.counts_length <= index do
@@ -388,7 +401,9 @@ defmodule Histogrex do
   when the histogram was created will cause an error. This is usually not called
   directly, but rather through the `record/3` of your custom registry
   """
-  @spec record(t, atom | binary, pos_integer, pos_integer) :: :ok | {:error, binary}
+  @spec record(t | {:error, any}, atom | binary, pos_integer, pos_integer) :: :ok | {:error, any}
+  def record({:error, _} = err, _metric, _value, _n), do: err
+  
   def record(h, metric, value, n) do
     index = get_value_index(h, value)
     case index < 0 or h.counts_length <= index do
@@ -491,6 +506,23 @@ defmodule Histogrex do
   @spec reset(t, atom | binary) :: :ok
   def reset(%Histogrex{} = h, metric) do
     :ets.insert(h.registrar, create_row(metric, h.counts_length))
+    :ok
+  end
+
+  @doc """
+  Deletes the histogram. The histogram can no longer be used.
+  """
+  @spec delete(t) :: :ok
+  def delete(%Histogrex{} = h), do: delete(h, h.name)
+
+
+  @doc """
+  Deletes the histogram. Since this histogram was dynamically created through
+  a template, you can safely continue using it.
+  """
+  @spec delete(t, atom | binary) :: :ok
+  def delete(%Histogrex{} = h, metric) do
+    :ets.delete(h.registrar, metric)
     :ok
   end
 

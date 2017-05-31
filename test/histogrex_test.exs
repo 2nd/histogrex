@@ -21,7 +21,7 @@ defmodule Histogrex.Tests do
     :ok
   end
 
-  test "returns error for unknown metric" do
+  test "handles querying invalid templates" do
     assert FakeRegistry.total_count(:bad_value) == 0
     assert FakeRegistry.total_count(:invalid, "users") == 0
     assert FakeRegistry.total_count(:http_ms, "other") == 0
@@ -41,6 +41,11 @@ defmodule Histogrex.Tests do
     assert FakeRegistry.min(FakeRegistry.iterator(:bad_value)) == 0
     assert FakeRegistry.min(FakeRegistry.iterator(:invalid, "users")) == 0
     assert FakeRegistry.min(FakeRegistry.iterator(:http_ms, "other")) == 0
+  end
+
+  test "error on recording invalid template" do
+    assert FakeRegistry.record(:bad, 22) == {:error, :undefined}
+    assert FakeRegistry.record(:invalid, "users", 44) == {:error, :undefined}
   end
 
   test "gets all registered metric names" do
@@ -79,7 +84,7 @@ defmodule Histogrex.Tests do
   end
 
   @tag clear: :http_ms
-  test "records against template" do
+  test "handles dynamic metrics (via template)" do
     FakeRegistry.record!(:http_ms, "users", 20)
     FakeRegistry.record!(:http_ms, "users", 30)
     FakeRegistry.record!(:http_ms, :about, 100)
@@ -115,6 +120,16 @@ defmodule Histogrex.Tests do
     assert FakeRegistry.min(it) == 100
     assert FakeRegistry.max(it) == 103
     assert FakeRegistry.mean(it) ==  101.66666666666667
+  end
+
+  @tag clear: :http_ms
+  test "deletes a dynamic metric" do
+    assert FakeRegistry.delete(:http_ms, "nope") == :ok
+    FakeRegistry.record!(:http_ms, "nope", 11)
+    FakeRegistry.record!(:http_ms, "nope", 12)
+    assert FakeRegistry.total_count(:http_ms, "nope") == 2
+    assert FakeRegistry.delete(:http_ms, "nope") == :ok
+    assert FakeRegistry.total_count(:http_ms, "nope") == 0
   end
 
   @tag clear: :high_sig
