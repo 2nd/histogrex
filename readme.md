@@ -74,6 +74,43 @@ Stats.total_count(it)
 Stats.value_at_quantile(it, 99.9)
 ```
 
+## Dynamic Metrics
+You won't always be able to define histograms upfront. In these cases, use templates:
+
+```
+defmodule MyApp.Stats do
+  use Histogrex
+
+  template :http_ms, min: 1, max: 10_000, precision: 2
+  ...
+end
+```
+
+The `template` macro takes the same arguments as the `histogrex` macro and, the
+two can live side by side. However, all your metric names must be unique.
+
+Overloaded functions take the template name and your dynamic metric name::
+
+```
+alias MyApp.Stats
+Stats.record!(:http_ms, "about", 82)
+
+Stats.mean(:http_ms, "about")
+Stats.max(:http_ms, "about")
+Stats.total_count(:http_ms, "about")
+Stats.value_at_quantile(:http_ms, "about", 99.9)
+```
+
+The dynamic metric name can be a string or atom.
+
+You can also get an iterator and use that for efficient multi-queries:
+
+```
+it = Stats.iterator(:http_ms, "about")
+Stats.max(it)
+Stats.mean(it)
+```
+
 ## Implementation
 
 The core histogram implementation is taken from [the Go version](https://github.com/codahale/hdrhistogram).

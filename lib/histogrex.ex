@@ -45,7 +45,7 @@ defmodule Histogrex do
   defstruct [
     :name, :registrar, :bucket_count, :counts_length, :unit_magnitude,
     :sub_bucket_mask, :sub_bucket_count, :sub_bucket_half_count,
-    :sub_bucket_half_count_magnitude,
+    :sub_bucket_half_count_magnitude, :template
   ]
 
   @type t :: %Histogrex{
@@ -53,7 +53,7 @@ defmodule Histogrex do
     bucket_count: pos_integer, counts_length: pos_integer,
     unit_magnitude: non_neg_integer, sub_bucket_mask: non_neg_integer,
     sub_bucket_count: non_neg_integer, sub_bucket_half_count: non_neg_integer,
-    sub_bucket_half_count_magnitude: non_neg_integer,
+    sub_bucket_half_count_magnitude: non_neg_integer, template: nil | tuple,
   }
 
   defmodule Iterator do
@@ -88,7 +88,7 @@ defmodule Histogrex do
   defmacro __using__(_opts) do
     quote location: :keep do
       use GenServer
-      import Histogrex, only: [histogrex: 2]
+      import Histogrex, only: [histogrex: 2, template: 2]
       alias Histogrex.Iterator, as: It
 
       @before_compile Histogrex
@@ -113,15 +113,43 @@ defmodule Histogrex do
       end
 
       @doc false
-      @spec record!(atom, non_neg_integer, non_neg_integer) :: :ok | no_return
-      def record!(metric, value, times \\ 1) do
-        Histogrex.record!(get_histogrex(metric), value, times)
+      @spec record!(atom, non_neg_integer) :: :ok | no_return
+      def record!(metric, value), do: record_n!(metric, value, 1)
+
+      @doc false
+      @spec record_n!(atom, non_neg_integer, non_neg_integer) :: :ok | no_return
+      def record_n!(metric, value, n) do
+        Histogrex.record!(get_histogrex(metric), value, n)
       end
 
       @doc false
-      @spec record(atom, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
-      def record(metric, value, times \\ 1) do
-        Histogrex.record(get_histogrex(metric), value, times)
+      @spec record(atom, non_neg_integer) :: :ok | {:error, binary}
+      def record(metric, value), do: record_n(metric, value, 1)
+
+      @doc false
+      @spec record_n(atom, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
+      def record_n(metric, value, n) do
+        Histogrex.record(get_histogrex(metric), value, n)
+      end
+
+      @doc false
+      @spec record!(atom, atom | binary, non_neg_integer) :: :ok | no_return
+      def record!(template, metric, value), do: record_n!(template, metric, value, 1)
+
+      @doc false
+      @spec record_n!(atom, atom | binary, non_neg_integer, non_neg_integer) :: :ok | no_return
+      def record_n!(template, metric, value, n) do
+        Histogrex.record!(get_histogrex(template), metric, value, n)
+      end
+
+      @doc false
+      @spec record(atom, atom | binary, non_neg_integer) :: :ok | {:error, binary}
+      def record(template, metric, value), do: record_n(template, metric, value, 1)
+
+      @doc false
+      @spec record_n(atom, atom | binary, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
+      def record_n(template, metric, value, n) do
+        Histogrex.record(get_histogrex(template), metric, value, n)
       end
 
       @doc false
@@ -136,59 +164,72 @@ defmodule Histogrex do
       end
 
       @doc false
-      @spec total_count(Iterator.t | atom) :: non_neg_integer
-      def total_count(%It{} = it) do
-        Histogrex.total_count(it)
+      @spec value_at_quantile(atom, atom | binary, number) :: non_neg_integer
+      def value_at_quantile(template, metric, q) do
+        Histogrex.value_at_quantile(get_histogrex(template), metric, q)
       end
 
       @doc false
-      def total_count(metric) do
-        Histogrex.total_count(get_histogrex(metric))
-      end
+      @spec total_count(Iterator.t | atom) :: non_neg_integer
+      def total_count(%It{} = it), do: Histogrex.total_count(it)
+
+      @doc false
+      def total_count(metric), do: Histogrex.total_count(get_histogrex(metric))
+
+      @doc false
+      @spec total_count(atom, atom | binary) :: non_neg_integer
+      def total_count(template, metric), do: Histogrex.total_count(get_histogrex(template), metric)
 
       @doc false
       @spec mean(atom) :: non_neg_integer
-      def mean(%It{} = it) do
-        Histogrex.mean(it)
-      end
+      def mean(%It{} = it), do: Histogrex.mean(it)
 
       @doc false
-      def mean(metric) do
-        Histogrex.mean(get_histogrex(metric))
-      end
+      def mean(metric), do: Histogrex.mean(get_histogrex(metric))
+
+      @doc false
+      @spec mean(atom, atom | binary) :: non_neg_integer
+      def mean(template, metric), do: Histogrex.mean(get_histogrex(template), metric)
 
       @doc false
       @spec max(Iterator.t | atom) :: non_neg_integer
-      def max(%It{} = it) do
-        Histogrex.max(it)
-      end
+      def max(%It{} = it), do: Histogrex.max(it)
 
       @doc false
-      def max(metric) do
-        Histogrex.max(get_histogrex(metric))
-      end
+      def max(metric), do: Histogrex.max(get_histogrex(metric))
+
+      @doc false
+      @spec max(atom, atom | binary) :: non_neg_integer
+      def max(template, metric), do: Histogrex.max(get_histogrex(template), metric)
 
       @doc false
       @spec min(Iterator.t | atom) :: non_neg_integer
-      def min(%It{} = it) do
-        Histogrex.min(it)
-      end
+      def min(%It{} = it), do: Histogrex.min(it)
 
       @doc false
-      def min(metric) do
-        Histogrex.min(get_histogrex(metric))
-      end
+      def min(metric), do: Histogrex.min(get_histogrex(metric))
+
+      @doc false
+      @spec min(atom, atom | binary) :: non_neg_integer
+      def min(template, metric), do: Histogrex.min(get_histogrex(template), metric)
 
       @doc false
       @spec reset(atom) :: :ok
-      def reset(metric) do
-        Histogrex.reset(get_histogrex(metric))
-      end
+      def reset(metric), do: Histogrex.reset(get_histogrex(metric))
+
+      @doc false
+      @spec reset(atom, atom | binary) :: :ok
+      def reset(template, metric), do: Histogrex.reset(get_histogrex(template), metric)
 
       @doc false
       @spec iterator(atom) :: Iterator.t
       def iterator(metric) do
         Histogrex.iterator(get_histogrex(metric))
+      end
+
+      @spec iterator(atom, atom | binary) :: Iterator.t
+      def iterator(template, metric) do
+        Histogrex.iterator(get_histogrex(template), metric)
       end
     end
   end
@@ -228,9 +269,16 @@ defmodule Histogrex do
   """
   defmacro histogrex(name, opts) do
     quote location: :keep do
-      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3))
+      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
       @histogrex_names unquote(name)
       @histogrex_registry @unquote(name)()
+      def get_histogrex(unquote(name)), do: @unquote(name)()
+    end
+  end
+
+  defmacro template(name, opts) do
+    quote location: :keep do
+      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
       def get_histogrex(unquote(name)), do: @unquote(name)()
     end
   end
@@ -240,8 +288,8 @@ defmodule Histogrex do
   structure. It does not create the underlying ets table/entries. There should
   be no need to call this direction. Use the `histogrex` macro instead.
   """
-  @spec new(binary | atom, module, pos_integer, pos_integer, 1..5) :: t
-  def new(name, registrar, min, max, precision \\ 3) when min > 0 and max > min and precision in (1..5) do
+  @spec new(binary | atom, module, pos_integer, pos_integer, 1..5, boolean) :: t
+  def new(name, registrar, min, max, precision \\ 3, template \\ false) when min > 0 and max > min and precision in (1..5) do
     largest_value_with_single_unit_resolution = 2 * :math.pow(10, precision)
     sub_bucket_count_magnitude = round(Float.ceil(:math.log2(largest_value_with_single_unit_resolution)))
 
@@ -262,8 +310,14 @@ defmodule Histogrex do
     bucket_count = calculate_bucket_count(bsl(sub_bucket_count, unit_magnitude), max, 1)
     counts_length = round((bucket_count + 1) * (sub_bucket_count / 2))
 
+    template = case template do
+      false -> nil
+      true -> create_row(name, counts_length)
+    end
+
     %__MODULE__{
       name: name,
+      template: template,
       registrar: registrar,
       bucket_count: bucket_count,
       counts_length: counts_length,
@@ -278,8 +332,8 @@ defmodule Histogrex do
   @doc """
   Same as `record/3` but raises on error
   """
-  @spec record!(h :: t, value :: pos_integer, times :: pos_integer) :: :ok | no_return
-    def record!(h, value, n \\ 1) do
+  @spec record!(t, pos_integer, pos_integer) :: :ok | no_return
+    def record!(h, value, n) do
     case record(h, value, n) do
       :ok -> :ok
       {:error, message} -> raise message
@@ -289,22 +343,45 @@ defmodule Histogrex do
   @doc """
   Records the `value` `n` times where `n` defaults to 1. Return `:ok` on success
   or `{:error, message}` on failure. A larger than the 'max' specified
-  when the histogram was created will cause an error.
-
-  ## Examples
-
-      Histogrex.record(MyStats.user_load, 23)
-
-      Histogrex.record(MyStats.user_load, 10, 2)
-
+  when the histogram was created will cause an error. This is usually not called
+  directly, but rather through the `record/3` of your custom registry
   """
   @spec record(t, pos_integer, pos_integer) :: :ok | {:error, binary}
-  def record(h, value, n \\ 1) do
+  def record(h, value, n) do
     index = get_value_index(h, value)
     case index < 0 or h.counts_length <= index do
       true -> {:error, "value it outside of range"}
       false ->
         :ets.update_counter(h.registrar, h.name, [{2, n}, {index+3, n}])
+        :ok
+    end
+  end
+
+  @doc """
+  Same as `record_template/4` but raises on error
+  """
+  @spec record!(t, atom | binary, pos_integer, pos_integer) :: :ok | no_return
+  def record!(template, metric, value, n) do
+    case record(template, metric, value, n) do
+      :ok -> :ok
+      {:error, message} -> raise message
+    end
+  end
+
+  @doc """
+  Records the `value` `n` times where `n` defaults to 1. Uses the template
+  to create the histogram if it doesn't already exist. Return `:ok` on success
+  or `{:error, message}` on failure. A larger than the 'max' specified
+  when the histogram was created will cause an error. This is usually not called
+  directly, but rather through the `record/3` of your custom registry
+  """
+  @spec record(t, atom | binary, pos_integer, pos_integer) :: :ok | {:error, binary}
+  def record(h, metric, value, n) do
+    index = get_value_index(h, value)
+    case index < 0 or h.counts_length <= index do
+      true -> {:error, "value it outside of range"}
+      false ->
+        :ets.update_counter(h.registrar, metric, [{2, n}, {index+3, n}], h.template)
         :ok
     end
   end
@@ -328,6 +405,14 @@ defmodule Histogrex do
     do_value_at_quantile(Iterator.reset(it), q)
   end
 
+  @doc """
+  Gets the value at the requested quantile for the templated histogram
+  """
+  @spec value_at_quantile(t, atom, float) :: float
+  def value_at_quantile(%Histogrex{} = h, metric, q) when q > 0 and q <= 100 do
+    do_value_at_quantile(iterator(h, metric), q)
+  end
+
   defp do_value_at_quantile(it, q) do
     count_at_percetile = round(Float.floor((q / 100 * it.total_count) + 0.5))
 
@@ -344,16 +429,17 @@ defmodule Histogrex do
   Returns the mean value
   """
   @spec mean(t | Iterator.t) :: float
-  def mean(%Histogrex{} = h) do
-    do_mean(iterator(h))
-  end
+  def mean(%Histogrex{} = h), do: do_mean(iterator(h))
 
   @doc """
   Returns the mean value from the iterator
   """
-  def mean(%Iterator{} = it) do
-    do_mean(Iterator.reset(it))
-  end
+  def mean(%Iterator{} = it), do: do_mean(Iterator.reset(it))
+
+  @doc """
+  Returns the mean value from a templated histogram
+  """
+  def mean(%Histogrex{} = h, metric), do: do_mean(iterator(h, metric))
 
   defp do_mean(it) do
     case it.total_count == 0 do
@@ -375,10 +461,23 @@ defmodule Histogrex do
   """
   @spec reset(t) :: :ok
   def reset(%Histogrex{} = h) do
-    # +1 for the total_count that we'll store at the start
-    entry = [h.name |  List.duplicate(0, h.counts_length + 1)]
-    :ets.insert(h.registrar, List.to_tuple(entry))
+    :ets.insert(h.registrar, create_row(h.name, h.counts_length))
     :ok
+  end
+
+  @doc """
+  Resets the histogram to 0 values for the templated historam.
+  Note that the histogram is a fixed-size, so calling this won't free any memory.
+  """
+  @spec reset(t, atom | binary) :: :ok
+  def reset(%Histogrex{} = h, metric) do
+    :ets.insert(h.registrar, create_row(metric, h.counts_length))
+    :ok
+  end
+
+  defp create_row(name, count) do
+    # +1 for the total_count that we'll store at the start
+    List.to_tuple([name |  List.duplicate(0, count + 1)])
   end
 
   @doc """
@@ -397,19 +496,28 @@ defmodule Histogrex do
   end
 
   @doc """
+  Get the total number of recorded values from an iterator. This is O(1)
+  """
+  @spec total_count(t, atom | binary) :: non_neg_integer
+  def total_count(%Histogrex{} = h, metric) do
+    elem(get_counts(h, metric), @total_count_index)
+  end
+
+  @doc """
   Gets the approximate maximum value recorded
   """
   @spec max(t | Iterator.t) :: non_neg_integer
-  def max(%Histogrex{} = h) do
-    do_max(iterator(h))
-  end
+  def max(%Histogrex{} = h), do: do_max(iterator(h))
 
   @doc """
   Gets the approximate maximum value recorded using the given iterator.
   """
-  def max(%Iterator{} = it) do
-    do_max(Iterator.reset(it))
-  end
+  def max(%Iterator{} = it), do: do_max(Iterator.reset(it))
+
+  @doc """
+  Returns the approximate maximum value from a templated histogram
+  """
+  def max(%Histogrex{} = h, metric), do: do_max(iterator(h, metric))
 
   defp do_max(it) do
     max = Enum.reduce(it, 0, fn it, max ->
@@ -425,16 +533,17 @@ defmodule Histogrex do
   Gets the approximate minimum value recorded
   """
   @spec min(t | Iterator.t) :: non_neg_integer
-  def min(%Histogrex{} = h) do
-    do_min(iterator(h))
-  end
+  def min(%Histogrex{} = h), do: do_min(iterator(h))
 
   @doc """
   Gets the approximate minimum value recorded using the given iterator.
   """
-  def min(%Iterator{} = it) do
-    do_min(Iterator.reset(it))
-  end
+  def min(%Iterator{} = it), do: do_min(Iterator.reset(it))
+
+  @doc """
+  Returns the approximate minimum value from a templated histogram
+  """
+  def min(%Histogrex{} = h, metric), do: do_min(iterator(h, metric))
 
   defp do_min(it) do
     min = Enum.reduce_while(it, 0, fn it, min ->
@@ -453,8 +562,17 @@ defmodule Histogrex do
     %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
   end
 
-  defp get_counts(h) do
-    [counts] = :ets.lookup(h.registrar, h.name)
+  @doc false
+  @spec iterator(t, atom | binary) :: Iterator.t
+  def iterator(h, metric) do
+    counts = get_counts(h, metric)
+    %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
+  end
+
+  defp get_counts(h), do: get_counts(h, h.name)
+
+  defp get_counts(h, metric) do
+    [counts] = :ets.lookup(h.registrar, metric)
     counts
   end
 
