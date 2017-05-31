@@ -82,7 +82,18 @@ defmodule Histogrex do
         count_to_index: 0, value_from_index: 0, highest_equivalent_value: 0
       }
     end
+
+    @doc false
+    @spec empty() :: t
+    def empty() do
+      h = %Histogrex{
+        bucket_count: 0, counts_length: 1, sub_bucket_mask: 0, unit_magnitude: 0,
+        sub_bucket_half_count: 0, sub_bucket_half_count_magnitude: 0, sub_bucket_count: 0,
+      }
+      %Iterator{total_count: 0, counts: 0, sub_bucket_index: 0, h: h}
+    end
   end
+
 
   @doc false
   defmacro __using__(_opts) do
@@ -246,6 +257,8 @@ defmodule Histogrex do
           Histogrex.reset(h)
         end
       end
+
+      def get_histogrex(_), do: {:error, :undefined}
     end
   end
 
@@ -436,10 +449,16 @@ defmodule Histogrex do
   """
   def mean(%Iterator{} = it), do: do_mean(Iterator.reset(it))
 
+  @doc false
+  def mean({:error, _}), do: 0
+
   @doc """
   Returns the mean value from a templated histogram
   """
   def mean(%Histogrex{} = h, metric), do: do_mean(iterator(h, metric))
+
+  @doc false
+  def mean({:error, _}, _metric), do: 0
 
   defp do_mean(it) do
     case it.total_count == 0 do
@@ -495,13 +514,22 @@ defmodule Histogrex do
     it.total_count
   end
 
+  @doc false
+  def total_count({:error, _}), do: 0
+
   @doc """
   Get the total number of recorded values from an iterator. This is O(1)
   """
   @spec total_count(t, atom | binary) :: non_neg_integer
   def total_count(%Histogrex{} = h, metric) do
-    elem(get_counts(h, metric), @total_count_index)
+    case get_counts(h, metric) do
+      nil -> 0
+      counts -> elem(counts, @total_count_index)
+    end
   end
+
+  @doc false
+  def total_count({:error, _}, _metric), do: 0
 
   @doc """
   Gets the approximate maximum value recorded
@@ -514,10 +542,16 @@ defmodule Histogrex do
   """
   def max(%Iterator{} = it), do: do_max(Iterator.reset(it))
 
+  @doc false
+  def max({:error, _}), do: 0
+
   @doc """
   Returns the approximate maximum value from a templated histogram
   """
   def max(%Histogrex{} = h, metric), do: do_max(iterator(h, metric))
+
+  @doc false
+  def max({:error, _}, _metric), do: 0
 
   defp do_max(it) do
     max = Enum.reduce(it, 0, fn it, max ->
@@ -540,10 +574,16 @@ defmodule Histogrex do
   """
   def min(%Iterator{} = it), do: do_min(Iterator.reset(it))
 
+  @doc false
+  def min({:error, _}), do: 0
+
   @doc """
   Returns the approximate minimum value from a templated histogram
   """
   def min(%Histogrex{} = h, metric), do: do_min(iterator(h, metric))
+
+  @doc false
+  def min({:error, _}, _metric), do: 0
 
   defp do_min(it) do
     min = Enum.reduce_while(it, 0, fn it, min ->
@@ -556,24 +596,32 @@ defmodule Histogrex do
   end
 
   @doc false
-  @spec iterator(t) :: Iterator.t
+  @spec iterator(t | {:error, any}) :: Iterator.t
+  def iterator({:error, _}), do: Iterator.empty()
+
   def iterator(h) do
     counts = get_counts(h)
     %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
   end
 
   @doc false
-  @spec iterator(t, atom | binary) :: Iterator.t
+  @spec iterator(t | {:error, any}, atom | binary) :: Iterator.t
+  def iterator({:error, _}, _metric), do: Iterator.empty()
+
   def iterator(h, metric) do
-    counts = get_counts(h, metric)
-    %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
+    case get_counts(h, metric) do
+      nil ->  Iterator.empty()
+      counts -> %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
+    end
   end
 
   defp get_counts(h), do: get_counts(h, h.name)
 
   defp get_counts(h, metric) do
-    [counts] = :ets.lookup(h.registrar, metric)
-    counts
+    case :ets.lookup(h.registrar, metric) do
+      [] -> nil
+      [counts] -> counts
+    end
   end
 
   defp calculate_bucket_count(smallest_untrackable_value, max, bucket_count) do

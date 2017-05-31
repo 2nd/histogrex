@@ -21,6 +21,28 @@ defmodule Histogrex.Tests do
     :ok
   end
 
+  test "returns error for unknown metric" do
+    assert FakeRegistry.total_count(:bad_value) == 0
+    assert FakeRegistry.total_count(:invalid, "users") == 0
+    assert FakeRegistry.total_count(:http_ms, "other") == 0
+
+    assert FakeRegistry.min(:bad_value) == 0
+    assert FakeRegistry.min(:invalid, "users") == 0
+    assert FakeRegistry.min(:http_ms, "other") == 0
+
+    assert FakeRegistry.max(:bad_value) == 0
+    assert FakeRegistry.max(:invalid, "users") == 0
+    assert FakeRegistry.max(:http_ms, "other") == 0
+
+    assert FakeRegistry.mean(:bad_value) == 0
+    assert FakeRegistry.mean(:invalid, "users") == 0
+    assert FakeRegistry.mean(:http_ms, "other") == 0
+
+    assert FakeRegistry.min(FakeRegistry.iterator(:bad_value)) == 0
+    assert FakeRegistry.min(FakeRegistry.iterator(:invalid, "users")) == 0
+    assert FakeRegistry.min(FakeRegistry.iterator(:http_ms, "other")) == 0
+  end
+
   test "gets all registered metric names" do
     assert FakeRegistry.get_names() == [:high_sig, :user_load]
   end
