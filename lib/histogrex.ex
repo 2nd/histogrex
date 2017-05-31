@@ -70,6 +70,18 @@ defmodule Histogrex do
       count_at_index: non_neg_integer, count_to_index: non_neg_integer,
       value_from_index: non_neg_integer, highest_equivalent_value: non_neg_integer,
     }
+
+    @doc """
+    Resets the iterator so that it can be reused. There shouldn't be a need to
+    execute this directly.
+    """
+    @spec reset(t) :: t
+    def reset(it) do
+      %{it |
+        bucket_index: 0, sub_bucket_index: -1, count_at_index: 0,
+        count_to_index: 0, value_from_index: 0, highest_equivalent_value: 0
+      }
+    end
   end
 
   @doc false
@@ -77,8 +89,11 @@ defmodule Histogrex do
     quote location: :keep do
       use GenServer
       import Histogrex, only: [histogrex: 2]
+      alias Histogrex.Iterator, as: It
+
       @before_compile Histogrex
 
+      Module.register_attribute(__MODULE__, :histogrex_names, accumulate: true)
       Module.register_attribute(__MODULE__, :histogrex_registry, accumulate: true)
 
       @doc false
@@ -97,44 +112,83 @@ defmodule Histogrex do
         {:reply, :ok, state}
       end
 
+      @doc false
       @spec record!(atom, non_neg_integer, non_neg_integer) :: :ok | no_return
       def record!(metric, value, times \\ 1) do
         Histogrex.record!(get_histogrex(metric), value, times)
       end
 
+      @doc false
       @spec record(atom, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
       def record(metric, value, times \\ 1) do
         Histogrex.record(get_histogrex(metric), value, times)
       end
 
-      @spec value_at_quantile(atom, float) :: non_neg_integer
+      @doc false
+      @spec value_at_quantile(Iterator.t | atom, number) :: non_neg_integer
+      def value_at_quantile(%It{} = it, q) do
+        Histogrex.value_at_quantile(it, q)
+      end
+
+      @doc false
       def value_at_quantile(metric, q) do
         Histogrex.value_at_quantile(get_histogrex(metric), q)
       end
 
-      @spec total_count(atom) :: non_neg_integer
+      @doc false
+      @spec total_count(Iterator.t | atom) :: non_neg_integer
+      def total_count(%It{} = it) do
+        Histogrex.total_count(it)
+      end
+
+      @doc false
       def total_count(metric) do
         Histogrex.total_count(get_histogrex(metric))
       end
 
+      @doc false
       @spec mean(atom) :: non_neg_integer
+      def mean(%It{} = it) do
+        Histogrex.mean(it)
+      end
+
+      @doc false
       def mean(metric) do
         Histogrex.mean(get_histogrex(metric))
       end
 
-      @spec max(atom) :: non_neg_integer
+      @doc false
+      @spec max(Iterator.t | atom) :: non_neg_integer
+      def max(%It{} = it) do
+        Histogrex.max(it)
+      end
+
+      @doc false
       def max(metric) do
         Histogrex.max(get_histogrex(metric))
       end
 
-      @spec min(atom) :: non_neg_integer
+      @doc false
+      @spec min(Iterator.t | atom) :: non_neg_integer
+      def min(%It{} = it) do
+        Histogrex.min(it)
+      end
+
+      @doc false
       def min(metric) do
         Histogrex.min(get_histogrex(metric))
       end
 
+      @doc false
       @spec reset(atom) :: :ok
       def reset(metric) do
         Histogrex.reset(get_histogrex(metric))
+      end
+
+      @doc false
+      @spec iterator(atom) :: Iterator.t
+      def iterator(metric) do
+        Histogrex.iterator(get_histogrex(metric))
       end
     end
   end
@@ -142,6 +196,9 @@ defmodule Histogrex do
   @doc false
   defmacro __before_compile__(_env) do
     quote do
+      @spec get_names() :: [atom]
+      def get_names(), do: @histogrex_names
+
       defp register_tables() do
         :ets.new(__MODULE__, [:set, :public, :named_table, write_concurrency: true])
         for h <- @histogrex_registry do
@@ -172,6 +229,7 @@ defmodule Histogrex do
   defmacro histogrex(name, opts) do
     quote location: :keep do
       @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3))
+      @histogrex_names unquote(name)
       @histogrex_registry @unquote(name)()
       def get_histogrex(unquote(name)), do: @unquote(name)()
     end
@@ -255,37 +313,60 @@ defmodule Histogrex do
   Gets the value at the requested quantile. The quantile must be greater than 0
   and less than or equal to 100. It can be a float.
   """
-  @spec value_at_quantile(t, float) :: float
-  def value_at_quantile(h, q) when q > 0 and q <= 100 do
-    it = iterator(h)
+  @spec value_at_quantile(t | Iterator.t, float) :: float
+  def value_at_quantile(%Histogrex{} = h, q) when q > 0 and q <= 100 do
+    do_value_at_quantile(iterator(h), q)
+  end
+
+  @doc """
+  Gets the value at the requested quantile using the given iterator. When doing
+  multiple calculations, it is slightly more efficent to first recreate and then
+  re-use an iterator (plus the values will consistently be calculated based on
+  the same data). Iterators are automatically reset before each call.
+  """
+  def value_at_quantile(%Iterator{} = it, q) when q > 0 and q <= 100 do
+    do_value_at_quantile(Iterator.reset(it), q)
+  end
+
+  defp do_value_at_quantile(it, q) do
     count_at_percetile = round(Float.floor((q / 100 * it.total_count) + 0.5))
 
     Enum.reduce_while(it, 0, fn it, total ->
       total = total + it.count_at_index
       case total >= count_at_percetile do
-        true -> {:halt, highest_equivalent_value(h, it.value_from_index)}
+        true -> {:halt, highest_equivalent_value(it.h, it.value_from_index)}
         false -> {:cont, total}
       end
     end)
   end
 
-  @spec mean(t) :: float
-  def mean(h) do
-    it = iterator(h)
-    case it.total_count == 0 do
-      true -> 0
-      false -> do_mean(h, it)
-    end
+  @doc """
+  Returns the mean value
+  """
+  @spec mean(t | Iterator.t) :: float
+  def mean(%Histogrex{} = h) do
+    do_mean(iterator(h))
   end
 
-  defp do_mean(h, it) do
-    total = Enum.reduce(it, 0, fn it, total ->
-      case it.count_at_index do
-        0 -> total
-        n -> total + n * median_equivalent_value(h, it.value_from_index)
-      end
-    end)
-    total / it.total_count
+  @doc """
+  Returns the mean value from the iterator
+  """
+  def mean(%Iterator{} = it) do
+    do_mean(Iterator.reset(it))
+  end
+
+  defp do_mean(it) do
+    case it.total_count == 0 do
+      true -> 0
+      false ->
+        total = Enum.reduce(it, 0, fn it, total ->
+          case it.count_at_index do
+            0 -> total
+            n -> total + n * median_equivalent_value(it.h, it.value_from_index)
+          end
+        end)
+        total / it.total_count
+    end
   end
 
   @doc """
@@ -293,7 +374,7 @@ defmodule Histogrex do
   calling this won't free any memory. It is useful for testing.
   """
   @spec reset(t) :: :ok
-  def reset(h) do
+  def reset(%Histogrex{} = h) do
     # +1 for the total_count that we'll store at the start
     entry = [h.name |  List.duplicate(0, h.counts_length + 1)]
     :ets.insert(h.registrar, List.to_tuple(entry))
@@ -303,40 +384,71 @@ defmodule Histogrex do
   @doc """
   Get the total number of recorded values. This is O(1)
   """
-  @spec total_count(t) :: non_neg_integer
-  def total_count(h) do
+  @spec total_count(t | Iterator.t) :: non_neg_integer
+  def total_count(%Histogrex{} = h) do
     elem(get_counts(h), @total_count_index)
+  end
+
+  @doc """
+  Get the total number of recorded values from an iterator. This is O(1)
+  """
+  def total_count(%Iterator{} = it) do
+    it.total_count
   end
 
   @doc """
   Gets the approximate maximum value recorded
   """
-  @spec max(t) :: non_neg_integer
-  def max(h) do
-    max = Enum.reduce(iterator(h), 0, fn it, max ->
+  @spec max(t | Iterator.t) :: non_neg_integer
+  def max(%Histogrex{} = h) do
+    do_max(iterator(h))
+  end
+
+  @doc """
+  Gets the approximate maximum value recorded using the given iterator.
+  """
+  def max(%Iterator{} = it) do
+    do_max(Iterator.reset(it))
+  end
+
+  defp do_max(it) do
+    max = Enum.reduce(it, 0, fn it, max ->
       case it.count_at_index == 0 do
         true -> max
         false -> it.highest_equivalent_value
       end
     end)
-    highest_equivalent_value(h, max)
+    highest_equivalent_value(it.h, max)
   end
 
   @doc """
   Gets the approximate minimum value recorded
   """
-  @spec min(t) :: non_neg_integer
-  def min(h) do
-    min = Enum.reduce_while(iterator(h), 0, fn it, min ->
+  @spec min(t | Iterator.t) :: non_neg_integer
+  def min(%Histogrex{} = h) do
+    do_min(iterator(h))
+  end
+
+  @doc """
+  Gets the approximate minimum value recorded using the given iterator.
+  """
+  def min(%Iterator{} = it) do
+    do_min(Iterator.reset(it))
+  end
+
+  defp do_min(it) do
+    min = Enum.reduce_while(it, 0, fn it, min ->
       case it.count_at_index != 0 && min == 0 do
         true -> {:halt, it.highest_equivalent_value}
         false -> {:cont, min}
       end
     end)
-    lowest_equivalent_value(h, min)
+    lowest_equivalent_value(it.h, min)
   end
 
-  defp iterator(h) do
+  @doc false
+  @spec iterator(t) :: Iterator.t
+  def iterator(h) do
     counts = get_counts(h)
     %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
   end

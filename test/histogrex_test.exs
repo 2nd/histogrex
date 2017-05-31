@@ -17,6 +17,10 @@ defmodule Histogrex.Tests do
     :ok
   end
 
+  test "gets all registered metric names" do
+    assert FakeRegistry.get_names() == [:high_sig, :user_load]
+  end
+
   test "value at quantile" do
      for {q, v} <- [{50, 500223}, {75, 750079}, {90, 900095}, {95, 950271}, {99, 990207}, {99.9, 999423}, {99.99, 999935}] do
        assert FakeRegistry.value_at_quantile(:user_load, q) == v
@@ -37,6 +41,15 @@ defmodule Histogrex.Tests do
 
    test "mean" do
      assert FakeRegistry.mean(:user_load) == 500000.013312
+   end
+
+   test "lookups via iterator" do
+     it = FakeRegistry.iterator(:user_load)
+     assert FakeRegistry.min(it) == 0
+     assert FakeRegistry.max(it) == 1000447
+     assert FakeRegistry.mean(it) == 500000.013312
+     assert FakeRegistry.total_count(it) == 1_000_000
+     assert FakeRegistry.value_at_quantile(it, 75) == 750079
    end
 
    @tag :high_sig

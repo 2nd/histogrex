@@ -61,6 +61,19 @@ It would be reasonable to have a GenServer dump these statistics to some log
 ingestor every X seconds (10? 60?). This would be the only reader (though
 concurrent reads are fully supported).
 
+## Query Multiple Metrics at Once
+If you're querying multiple metrics from an histogram at once, you can get a
+slight performance boost by first getting an iterator and querying that.
+There is no need to reset the iterator between calls:
+
+```
+it = Stats.iterator(:load_user)
+Stats.mean(it)
+Stats.max(it)
+Stats.total_count(it)
+Stats.value_at_quantile(it, 99.9)
+```
+
 ## Implementation
 
 The core histogram implementation is taken from [the Go version](https://github.com/codahale/hdrhistogram).
