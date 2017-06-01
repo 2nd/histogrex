@@ -17,7 +17,15 @@ A histogram with a range of 1..1_000_000 and a precision of 3 takes roughly
 
 ## Usage
 
-The fist step involves creating a registry:
+First, add `histogrex` to your`mix.exs` file:
+
+```
+def deps do
+  [{:histogrex, "~> 0.0.3"}]
+end
+```
+
+Next, create a registry:
 
 ```
 defmodule MyApp.Stats do
@@ -29,13 +37,12 @@ defmodule MyApp.Stats do
 end
 ```
 
-And then adding this module as a `worker` to your application's supervisor
+And then add this module as a `worker` to your application's supervisor
 tree:
 
 ```
 worker(MyApp.Stats, [])
 ```
-
 
 Values can then be recorded via the `record!` or `record` functions:
 
