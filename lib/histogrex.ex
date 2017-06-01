@@ -224,7 +224,10 @@ defmodule Histogrex do
       def min(template, metric), do: Histogrex.min(get_histogrex(template), metric)
 
       @doc false
-      @spec reset(atom) :: :ok
+      @spec reset(Iterator.t | atom) :: :ok
+      def reset(%It{} = it), do: Histogrex.reset(it)
+
+      @doc false
       def reset(metric), do: Histogrex.reset(get_histogrex(metric))
 
       @doc false
@@ -494,9 +497,22 @@ defmodule Histogrex do
   Resets the histogram to 0 values. Note that the histogram is a fixed-size, so
   calling this won't free any memory. It is useful for testing.
   """
-  @spec reset(t) :: :ok
+  @spec reset(t | Iterator.t) :: :ok
   def reset(%Histogrex{} = h) do
     :ets.insert(h.registrar, create_row(h.name, nil, h.counts_length))
+    :ok
+  end
+
+  @doc """
+  Resets the histogram to 0 values using an iterator. It is safe to reset an
+  iterator during a `reduce`.
+  """
+  def reset(%Iterator{} = it) do
+    h = it.h
+    # cannot use it.h.name as this could be a dynamic metric and we don't want
+    # the template name
+    name = elem(it.counts, 0)
+    :ets.insert(h.registrar, create_row(name, nil, h.counts_length))
     :ok
   end
 

@@ -132,6 +132,16 @@ defmodule Histogrex.Tests do
     assert FakeRegistry.total_count(:http_ms, "nope") == 0
   end
 
+  test "resets via iterator" do
+    FakeRegistry.record!(:http_ms, "rs", 23)
+    FakeRegistry.reset(FakeRegistry.iterator(:http_ms, "rs"))
+    assert FakeRegistry.total_count(:http_ms, "rs") == 0
+
+    FakeRegistry.record!(:high_sig, 9381)
+    FakeRegistry.reset(FakeRegistry.iterator(:high_sig))
+    assert FakeRegistry.total_count(:high_sig) == 0
+  end
+
   @tag clear: :high_sig
   test "empty mean" do
     assert FakeRegistry.mean(:high_sig) == 0
