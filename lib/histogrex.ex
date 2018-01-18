@@ -113,6 +113,10 @@ defmodule Histogrex do
         {:ok, pid}
       end
 
+      def init(args) do
+        {:ok, args}
+      end
+
       @doc false
       # we can't inline register_tables() in here as we need the @histogrex_registry
       # module to get loaded with values. register_tables is created via the
@@ -790,6 +794,9 @@ defimpl Enumerable, for: Histogrex.Iterator do
 
   @doc false
   def member?(_it, _value), do: {:error, __MODULE__}
+
+  @doc false
+  def slice(_it), do: {:error, __MODULE__}
 
   @doc false
   def reduce(_it, {:halt, acc}, _f), do: {:halted, acc}
