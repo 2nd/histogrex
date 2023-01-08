@@ -38,7 +38,7 @@ defmodule Histogrex do
       Stats.total_count(:db_save_settings)
       Stats.value_at_quantile(:load_user, 99.9)
   """
-  use Bitwise
+  import Bitwise
 
   @total_count_index 2
 
@@ -301,17 +301,21 @@ defmodule Histogrex do
   """
   defmacro histogrex(name, opts) do
     quote location: :keep do
-      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
-      @histogrex_names unquote(name)
-      @histogrex_registry @unquote(name)()
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      Module.register_attribute(__MODULE__, unquote(name), [])
+      Module.put_attribute(__MODULE__, unquote(name), Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
+      Module.register_attribute(__MODULE__, :histrogrex_names, [])
+      Module.put_attribute(__MODULE__, :histogrex_names, unquote(name))
+      Module.register_attribute(__MODULE__, :histogrex_registry, [])
+      Module.put_attribute(__MODULE__, :histogrex_registry,  Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
+      def get_histogrex(unquote(name)), do: Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false)
     end
   end
 
   defmacro template(name, opts) do
     quote location: :keep do
-      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      Module.register_attribute(__MODULE__, unquote(name), [])
+      Module.put_attribute(__MODULE__, unquote(name), Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
+      def get_histogrex(unquote(name)), do: Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true)
     end
   end
 
@@ -425,25 +429,23 @@ defmodule Histogrex do
   @doc """
   Gets the value at the requested quantile. The quantile must be greater than 0
   and less than or equal to 100. It can be a float.
+
+  Gets the value at the requested quantile using the given iterator. When doing
+  multiple calculations, it is slightly more efficent to first recreate and then
+  re-use an iterator (plus the values will consistently be calculated based on
+  the same data). Iterators are automatically reset before each call.
+
+  Gets the value at the requested quantile for the templated histogram
   """
   @spec value_at_quantile(t | Iterator.t, float) :: float
   def value_at_quantile(%Histogrex{} = h, q) when q > 0 and q <= 100 do
     do_value_at_quantile(iterator(h), q)
   end
 
-  @doc """
-  Gets the value at the requested quantile using the given iterator. When doing
-  multiple calculations, it is slightly more efficent to first recreate and then
-  re-use an iterator (plus the values will consistently be calculated based on
-  the same data). Iterators are automatically reset before each call.
-  """
   def value_at_quantile(%Iterator{} = it, q) when q > 0 and q <= 100 do
     do_value_at_quantile(Iterator.reset(it), q)
   end
 
-  @doc """
-  Gets the value at the requested quantile for the templated histogram
-  """
   @spec value_at_quantile(t, atom, float) :: float
   def value_at_quantile(%Histogrex{} = h, metric, q) when q > 0 and q <= 100 do
     do_value_at_quantile(iterator(h, metric), q)
@@ -467,20 +469,12 @@ defmodule Histogrex do
   @spec mean(t | Iterator.t) :: float
   def mean(%Histogrex{} = h), do: do_mean(iterator(h))
 
-  @doc """
-  Returns the mean value from the iterator
-  """
   def mean(%Iterator{} = it), do: do_mean(Iterator.reset(it))
 
-  @doc false
   def mean({:error, _}), do: 0
 
-  @doc """
-  Returns the mean value from a templated histogram
-  """
   def mean(%Histogrex{} = h, metric), do: do_mean(iterator(h, metric))
 
-  @doc false
   def mean({:error, _}, _metric), do: 0
 
   defp do_mean(it) do
@@ -507,10 +501,6 @@ defmodule Histogrex do
     :ok
   end
 
-  @doc """
-  Resets the histogram to 0 values using an iterator. It is safe to reset an
-  iterator during a `reduce`.
-  """
   def reset(%Iterator{} = it) do
     h = it.h
     # cannot use it.h.name as this could be a dynamic metric and we don't want
@@ -520,10 +510,6 @@ defmodule Histogrex do
     :ok
   end
 
-  @doc """
-  Resets the histogram to 0 values for the templated historam.
-  Note that the histogram is a fixed-size, so calling this won't free any memory.
-  """
   @spec reset(t, atom | binary) :: :ok
   def reset(%Histogrex{} = h, metric) do
     :ets.insert(h.registrar, create_row(metric, h.name, h.counts_length))
@@ -559,19 +545,12 @@ defmodule Histogrex do
     elem(get_counts(h), @total_count_index)
   end
 
-  @doc """
-  Get the total number of recorded values from an iterator. This is O(1)
-  """
   def total_count(%Iterator{} = it) do
     it.total_count
   end
 
-  @doc false
   def total_count({:error, _}), do: 0
 
-  @doc """
-  Get the total number of recorded values from an iterator. This is O(1)
-  """
   @spec total_count(t, atom | binary) :: non_neg_integer
   def total_count(%Histogrex{} = h, metric) do
     case get_counts(h, metric) do
@@ -580,29 +559,20 @@ defmodule Histogrex do
     end
   end
 
-  @doc false
   def total_count({:error, _}, _metric), do: 0
 
   @doc """
-  Gets the approximate maximum value recorded
+  Gets the approximate maximum value recorded. Works both with Iterator and Histogram
   """
   @spec max(t | Iterator.t) :: non_neg_integer
   def max(%Histogrex{} = h), do: do_max(iterator(h))
 
-  @doc """
-  Gets the approximate maximum value recorded using the given iterator.
-  """
   def max(%Iterator{} = it), do: do_max(Iterator.reset(it))
 
-  @doc false
   def max({:error, _}), do: 0
 
-  @doc """
-  Returns the approximate maximum value from a templated histogram
-  """
   def max(%Histogrex{} = h, metric), do: do_max(iterator(h, metric))
 
-  @doc false
   def max({:error, _}, _metric), do: 0
 
   defp do_max(it) do
@@ -616,17 +586,13 @@ defmodule Histogrex do
   end
 
   @doc """
-  Gets the approximate minimum value recorded
+  Gets the approximate minimum value recorded. Works both with Iterator and Histogram
   """
   @spec min(t | Iterator.t) :: non_neg_integer
   def min(%Histogrex{} = h), do: do_min(iterator(h))
 
-  @doc """
-  Gets the approximate minimum value recorded using the given iterator.
-  """
   def min(%Iterator{} = it), do: do_min(Iterator.reset(it))
 
-  @doc false
   def min({:error, _}), do: 0
 
   @doc """
@@ -786,7 +752,6 @@ defmodule Histogrex do
 end
 
 defimpl Enumerable, for: Histogrex.Iterator do
-  use Bitwise
   @doc """
   Gets the total count of recorded samples. This is an 0(1) operation
   """
