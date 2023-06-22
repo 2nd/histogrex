@@ -1,13 +1,13 @@
 defmodule Histogrex.Mixfile do
   use Mix.Project
 
-   @version "0.0.11"
+   @version "0.0.12"
 
   def project do
     [
       app: :histogrex,
       deps: deps(),
-      elixir: "~> 1.10",
+      elixir: "~> 1.11",
       name: "Histogrex",
       version: @version,
       consolidate_protocols: Mix.env != :test,
@@ -33,10 +33,8 @@ defmodule Histogrex.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "== 0.28.5", only: :dev},
-      {:dialyxir, "== 1.2.0", only: [:dev], runtime: false},
-      {:earmark, "== 1.4.27", only: :dev},
-      {:earmark_parser, "== 1.4.27", only: :dev}
+      {:ex_doc, "~> 0.0", only: :dev},
+      {:dialyxir, "~> 1.3", only: [:dev], runtime: false}
     ]
   end
 end

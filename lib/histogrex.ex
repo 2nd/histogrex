@@ -38,7 +38,7 @@ defmodule Histogrex do
       Stats.total_count(:db_save_settings)
       Stats.value_at_quantile(:load_user, 99.9)
   """
-  use Bitwise
+  import Bitwise
 
   @total_count_index 2
 
@@ -755,7 +755,6 @@ defmodule Histogrex do
 end
 
 defimpl Enumerable, for: Histogrex.Iterator do
-  use Bitwise
   @doc """
   Gets the total count of recorded samples. This is an 0(1) operation
   """
