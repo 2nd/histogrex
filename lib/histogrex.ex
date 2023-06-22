@@ -300,18 +300,20 @@ defmodule Histogrex do
 
   """
   defmacro histogrex(name, opts) do
+    name_var = Macro.var(name, __MODULE__)
     quote location: :keep do
       @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
       @histogrex_names unquote(name)
-      @histogrex_registry @unquote(name)()
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      @histogrex_registry @unquote(name_var)
+      def get_histogrex(unquote(name)), do: @unquote(name_var)
     end
   end
 
   defmacro template(name, opts) do
+    name_var = Macro.var(name, __MODULE__)
     quote location: :keep do
       @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      def get_histogrex(unquote(name)), do: @unquote(name_var)
     end
   end
 
