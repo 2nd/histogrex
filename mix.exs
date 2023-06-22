@@ -7,7 +7,7 @@ defmodule Histogrex.Mixfile do
     [
       app: :histogrex,
       deps: deps(),
-      elixir: "~> 1.7",
+      elixir: "~> 1.10",
       name: "Histogrex",
       version: @version,
       consolidate_protocols: Mix.env != :test,
@@ -33,10 +33,10 @@ defmodule Histogrex.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "== 0.22.6", only: :dev},
-      {:dialyxir, "== 1.0.0", only: [:dev], runtime: false},
-      {:earmark, "== 1.4.10", only: :dev},
-      {:earmark_parser, "== 1.4.10", only: :dev}
+      {:ex_doc, "== 0.24.2", only: :dev},
+      {:dialyxir, "== 1.1.0", only: [:dev], runtime: false},
+      {:earmark, "== 1.4.15", only: :dev},
+      {:earmark_parser, "== 1.4.15", only: :dev}
     ]
   end
 end
