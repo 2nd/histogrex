@@ -300,18 +300,20 @@ defmodule Histogrex do
 
   """
   defmacro histogrex(name, opts) do
+    name_var = Macro.var(name, __MODULE__)
     quote location: :keep do
       @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
       @histogrex_names unquote(name)
-      @histogrex_registry @unquote(name)()
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      @histogrex_registry @unquote(name_var)
+      def get_histogrex(unquote(name)), do: @unquote(name_var)
     end
   end
 
   defmacro template(name, opts) do
+    name_var = Macro.var(name, __MODULE__)
     quote location: :keep do
       @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
-      def get_histogrex(unquote(name)), do: @unquote(name)()
+      def get_histogrex(unquote(name)), do: @unquote(name_var)
     end
   end
 
@@ -425,25 +427,21 @@ defmodule Histogrex do
   @doc """
   Gets the value at the requested quantile. The quantile must be greater than 0
   and less than or equal to 100. It can be a float.
+
+  Gets the value at the requested quantile using the given iterator. When doing
+  multiple calculations, it is slightly more efficent to first recreate and then
+  re-use an iterator (plus the values will consistently be calculated based on
+  the same data). Iterators are automatically reset before each call.
   """
   @spec value_at_quantile(t | Iterator.t, float) :: float
   def value_at_quantile(%Histogrex{} = h, q) when q > 0 and q <= 100 do
     do_value_at_quantile(iterator(h), q)
   end
 
-  @doc """
-  Gets the value at the requested quantile using the given iterator. When doing
-  multiple calculations, it is slightly more efficent to first recreate and then
-  re-use an iterator (plus the values will consistently be calculated based on
-  the same data). Iterators are automatically reset before each call.
-  """
   def value_at_quantile(%Iterator{} = it, q) when q > 0 and q <= 100 do
     do_value_at_quantile(Iterator.reset(it), q)
   end
 
-  @doc """
-  Gets the value at the requested quantile for the templated histogram
-  """
   @spec value_at_quantile(t, atom, float) :: float
   def value_at_quantile(%Histogrex{} = h, metric, q) when q > 0 and q <= 100 do
     do_value_at_quantile(iterator(h, metric), q)
@@ -467,17 +465,10 @@ defmodule Histogrex do
   @spec mean(t | Iterator.t) :: float
   def mean(%Histogrex{} = h), do: do_mean(iterator(h))
 
-  @doc """
-  Returns the mean value from the iterator
-  """
   def mean(%Iterator{} = it), do: do_mean(Iterator.reset(it))
 
-  @doc false
   def mean({:error, _}), do: 0
 
-  @doc """
-  Returns the mean value from a templated histogram
-  """
   def mean(%Histogrex{} = h, metric), do: do_mean(iterator(h, metric))
 
   @doc false
@@ -498,8 +489,14 @@ defmodule Histogrex do
   end
 
   @doc """
-  Resets the histogram to 0 values. Note that the histogram is a fixed-size, so
+  When providing a Histogrex, resets the histogram to 0 values. Note that the histogram is a fixed-size, so
   calling this won't free any memory. It is useful for testing.
+  
+  When providing an Iterator, resets the histogram to 0 values using an iterator. It is safe to reset an
+  iterator during a `reduce`.
+
+  When providing a Histogrex and a metric, resets the histogram to 0 values for the templated historam.
+  Note that the histogram is a fixed-size, so calling this won't free any memory.
   """
   @spec reset(t | Iterator.t) :: :ok
   def reset(%Histogrex{} = h) do
@@ -507,10 +504,6 @@ defmodule Histogrex do
     :ok
   end
 
-  @doc """
-  Resets the histogram to 0 values using an iterator. It is safe to reset an
-  iterator during a `reduce`.
-  """
   def reset(%Iterator{} = it) do
     h = it.h
     # cannot use it.h.name as this could be a dynamic metric and we don't want
@@ -520,10 +513,6 @@ defmodule Histogrex do
     :ok
   end
 
-  @doc """
-  Resets the histogram to 0 values for the templated historam.
-  Note that the histogram is a fixed-size, so calling this won't free any memory.
-  """
   @spec reset(t, atom | binary) :: :ok
   def reset(%Histogrex{} = h, metric) do
     :ets.insert(h.registrar, create_row(metric, h.name, h.counts_length))
@@ -559,14 +548,10 @@ defmodule Histogrex do
     elem(get_counts(h), @total_count_index)
   end
 
-  @doc """
-  Get the total number of recorded values from an iterator. This is O(1)
-  """
   def total_count(%Iterator{} = it) do
     it.total_count
   end
 
-  @doc false
   def total_count({:error, _}), do: 0
 
   @doc """
@@ -589,20 +574,12 @@ defmodule Histogrex do
   @spec max(t | Iterator.t) :: non_neg_integer
   def max(%Histogrex{} = h), do: do_max(iterator(h))
 
-  @doc """
-  Gets the approximate maximum value recorded using the given iterator.
-  """
   def max(%Iterator{} = it), do: do_max(Iterator.reset(it))
 
-  @doc false
   def max({:error, _}), do: 0
 
-  @doc """
-  Returns the approximate maximum value from a templated histogram
-  """
   def max(%Histogrex{} = h, metric), do: do_max(iterator(h, metric))
 
-  @doc false
   def max({:error, _}, _metric), do: 0
 
   defp do_max(it) do
@@ -621,20 +598,12 @@ defmodule Histogrex do
   @spec min(t | Iterator.t) :: non_neg_integer
   def min(%Histogrex{} = h), do: do_min(iterator(h))
 
-  @doc """
-  Gets the approximate minimum value recorded using the given iterator.
-  """
   def min(%Iterator{} = it), do: do_min(Iterator.reset(it))
 
-  @doc false
   def min({:error, _}), do: 0
 
-  @doc """
-  Returns the approximate minimum value from a templated histogram
-  """
   def min(%Histogrex{} = h, metric), do: do_min(iterator(h, metric))
 
-  @doc false
   def min({:error, _}, _metric), do: 0
 
   defp do_min(it) do
