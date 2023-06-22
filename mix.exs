@@ -1,7 +1,7 @@
 defmodule Histogrex.Mixfile do
   use Mix.Project
 
-   @version "0.0.10"
+   @version "0.0.11"
 
   def project do
     [
@@ -33,10 +33,10 @@ defmodule Histogrex.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "== 0.26.0", only: :dev},
-      {:dialyxir, "== 1.1.0", only: [:dev], runtime: false},
-      {:earmark, "== 1.4.18", only: :dev},
-      {:earmark_parser, "== 1.4.18", only: :dev}
+      {:ex_doc, "== 0.28.5", only: :dev},
+      {:dialyxir, "== 1.2.0", only: [:dev], runtime: false},
+      {:earmark, "== 1.4.27", only: :dev},
+      {:earmark_parser, "== 1.4.27", only: :dev}
     ]
   end
 end
